@@ -23,6 +23,17 @@ namespace AttendanceAPIV2.Controllers
         public async Task<IActionResult> createSession([FromForm] SessionDto sessionDto, [FromQuery] int? foldreId)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
+            var user = _context.Users.FirstOrDefault(u => u.Id == userId && u.UserRole == "Instructor");
+            if (user == null)
+            {
+                return BadRequest(new { message = "You are not authorized, please login with an Instructor account." });
+            }
+
             // Create and save the session
             var session = new Session
             {
@@ -88,6 +99,10 @@ namespace AttendanceAPIV2.Controllers
                     await sessionDto.Sheet.CopyToAsync(stream3);
                     session.Sheet = stream3.ToArray();
                 }
+                else
+                {
+                    return BadRequest(new { message = "upload excel sheet,please." });
+                }
                 if (sessionDto.FacesFolder == null && sessionDto.VoicesFolder == null && sessionDto.Sheet == null)
                 {
                     return BadRequest(new { message = "upload one file at least." });
@@ -98,13 +113,19 @@ namespace AttendanceAPIV2.Controllers
             _context.Sessions.Add(session);
             await _context.SaveChangesAsync();
 
-            return Ok();
+            return Ok(new { message = "Session created successfully." });
         }
 
 
         [HttpGet("All_Sessions")]
         public async Task<ActionResult<List<SessionListDto>>> GetSessions()
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
             var sessionSummaries = await _context.Sessions
                 .Select(p => new SessionListDto
                 {
@@ -124,6 +145,12 @@ namespace AttendanceAPIV2.Controllers
         public async Task<IActionResult> GetUserSessions()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
+           
             var sessions = await _context.Sessions
                 .Where(p => p.User_Id == userId)
                 .Select(p => new { p.SessionName })
@@ -135,6 +162,12 @@ namespace AttendanceAPIV2.Controllers
         [HttpGet("Session_Data/{id}")]
         public async Task<ActionResult<List<SessionDataDto>>> DataOfSession(int id)
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
             var data = await _context.Sessions
                 .Where(p => p.SessionId == id)
                 .Select(p => new SessionDataDto
@@ -160,6 +193,18 @@ namespace AttendanceAPIV2.Controllers
         public async Task<IActionResult> EditSession(int id, [FromForm] EditSessionDto editSessionDto)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
+            var user = _context.Users.FirstOrDefault(u => u.Id == userId && u.UserRole == "Instructor");
+            if (user == null)
+            {
+                return BadRequest(new { message = "You are not authorized, please login with an Instructor account." });
+            }
+
+
             var session = await _context.Sessions.FindAsync(id);
 
             if (session == null)
@@ -208,6 +253,17 @@ namespace AttendanceAPIV2.Controllers
         public async Task<IActionResult> DeleteSession(int id)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
+            var user = _context.Users.FirstOrDefault(u => u.Id == userId && u.UserRole == "Instructor");
+            if (user == null)
+            {
+                return BadRequest(new { message = "You are not authorized, please login with an Instructor account." });
+            }
+
             var session = await _context.Sessions.FindAsync(id);
 
             if (session == null)

@@ -21,8 +21,8 @@ namespace AttendanceAPIV2.Models
         public string Gender { get; set; }
 
         [Required]
-        [RegularExpression(@"^(Instructor|Attender|Admin)$", ErrorMessage = "Invalid user role. Valid roles are 'Instructor', 'Attender', 'Admin'.")]
-        //Instructor or Attender or Admin
+        [RegularExpression(@"^(Instructor|Attender)$", ErrorMessage = "Invalid user role. Valid roles are 'Instructor', 'Attender'.")]
+        //Instructor or Attender 
         public string UserRole { get; set; }
 
         public virtual List<AttendanceRecord> AttendanceRecords { get; set; }

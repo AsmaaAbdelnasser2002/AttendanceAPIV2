@@ -23,7 +23,6 @@ namespace AttendanceAPIV2.Models
 
         [StringLength(20)]
         [RegularExpression(@"^(Present|Absent)$", ErrorMessage = "Invalid Status. Valid Status are 'Present', 'Absent'.")]
-
         public AttendanceStatus Status { get; set; }
 
         [ForeignKey("User")]

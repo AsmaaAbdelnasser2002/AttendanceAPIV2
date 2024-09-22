@@ -12,8 +12,9 @@ using static NuGet.Packaging.PackagingConstants;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using OfficeOpenXml.Style;
+using System.Data;
 
-namespace ExamRoomV3.Controllers
+namespace AttendanceAPIV2.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
@@ -32,7 +33,9 @@ namespace ExamRoomV3.Controllers
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId == null)
-                return NotFound();
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
 
             var folders = await _context.Folders
                 .Where(p => p.User_Id == userId)
@@ -46,6 +49,12 @@ namespace ExamRoomV3.Controllers
         [HttpGet("GetFolderData/{id}")]
         public async Task<ActionResult<Folder>> GetFolderData(int id)
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
             var folder = await _context.Folders
                .Where(p => p.FolderId == id)
                .Select(p => new FolderDataDto
@@ -74,7 +83,15 @@ namespace ExamRoomV3.Controllers
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId == null)
-                return NotFound();
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
+            var user = _context.Users.FirstOrDefault(u => u.Id == userId && u.UserRole == "Instructor");
+            if (user == null)
+            {
+                return BadRequest(new { message = "You are not authorized, please login with an Instructor account." });
+            }
 
             var folder = new Folder
             {
@@ -143,6 +160,10 @@ namespace ExamRoomV3.Controllers
                     await folderDto.Sheet.CopyToAsync(stream3);
                     folder.Sheet = stream3.ToArray();
                 }
+                else 
+                {
+                    return BadRequest(new { message = "upload excel sheet,please." });
+                }
                 if(folderDto.FacesFolder == null && folderDto.VoicesFolder == null && folderDto.Sheet == null) 
                 {
                     return BadRequest(new { message = "upload one file at least." });
@@ -151,13 +172,14 @@ namespace ExamRoomV3.Controllers
             }
             _context.Add(folder);
             await _context.SaveChangesAsync();
-           
-            if (id != null)
-            {
-                return CreatedAtAction(nameof(GetFolderData), new { id = folder.ParentFolderId }, folder);
-               
-            }
-            return CreatedAtAction(nameof(GetFolderData), new { id = folder.FolderId }, folder);
+
+            return Ok(new { message = "Folder created successfully." });
+            //if (id != null)
+            //{
+            //    return CreatedAtAction(nameof(GetFolderData), new { id = folder.ParentFolderId }, folder);
+
+            //}
+            //return CreatedAtAction(nameof(GetFolderData), new { id = folder.FolderId }, folder);
         }
 
        
@@ -167,6 +189,18 @@ namespace ExamRoomV3.Controllers
         public async Task<IActionResult> UpdateFolder(int id, [FromQuery] int? parentId, [FromForm] FolderDto folderDto)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (userId == null)
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
+            var user = _context.Users.FirstOrDefault(u => u.Id == userId && u.UserRole == "Instructor");
+            if (user == null)
+            {
+                return BadRequest(new { message = "You are not authorized, please login with an Instructor account." });
+            }
+
             var folder = await _context.Folders.FindAsync(id);
 
             if (folder == null)
@@ -389,6 +423,19 @@ namespace ExamRoomV3.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteFolder(int id)
         {
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null)
+            {
+                return BadRequest(new { message = "Please login First." });
+            }
+
+            var user = _context.Users.FirstOrDefault(u => u.Id == userId && u.UserRole == "Instructor");
+            if (user == null)
+            {
+                return BadRequest(new { message = "You are not authorized, please login with an Instructor account." });
+            }
+
             var folder = await _context.Folders.FindAsync(id);
             if (folder == null)
                 return NotFound();

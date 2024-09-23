@@ -10,6 +10,7 @@ namespace AttendanceAPIV2.Models.DTOs
 {
     public class SessionListDto
     {
+        public int SessionId { get; set; }
         [Required]
         [StringLength(100)]
         public string SessionName { get; set; }

@@ -113,7 +113,7 @@ namespace AttendanceAPIV2.Controllers
             _context.Sessions.Add(session);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Session created successfully." });
+            return Ok(session);
         }
 
 
@@ -129,7 +129,7 @@ namespace AttendanceAPIV2.Controllers
             var sessionSummaries = await _context.Sessions
                 .Select(p => new SessionListDto
                 {
-
+                    SessionId=p.SessionId,
                     SessionName = p.SessionName,
                     StartTime = p.StartTime,
                     EndTime = p.EndTime,
@@ -141,23 +141,23 @@ namespace AttendanceAPIV2.Controllers
             
         }
 
-        [HttpGet("userSessions")]
-        public async Task<IActionResult> GetUserSessions()
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId == null)
-            {
-                return BadRequest(new { message = "Please login First." });
-            }
+        //[HttpGet("userSessions")]
+        //public async Task<IActionResult> GetUserSessions()
+        //{
+        //    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        //    if (userId == null)
+        //    {
+        //        return BadRequest(new { message = "Please login First." });
+        //    }
 
            
-            var sessions = await _context.Sessions
-                .Where(p => p.User_Id == userId)
-                .Select(p => new { p.SessionName })
-                .ToListAsync();
+        //    var sessions = await _context.Sessions
+        //        .Where(p => p.User_Id == userId)
+        //        .Select(p => new { p.SessionName })
+        //        .ToListAsync();
 
-            return Ok(sessions);
-        }
+        //    return Ok(sessions);
+        //}
 
         [HttpGet("Session_Data/{id}")]
         public async Task<ActionResult<List<SessionDataDto>>> DataOfSession(int id)
@@ -172,7 +172,7 @@ namespace AttendanceAPIV2.Controllers
                 .Where(p => p.SessionId == id)
                 .Select(p => new SessionDataDto
                 {
-
+                    SessionId= p.SessionId,
                     SessionName = p.SessionName,
                     SessionPlace = p.SessionPlace,
                     SessionDescription = p.SessionDescription,

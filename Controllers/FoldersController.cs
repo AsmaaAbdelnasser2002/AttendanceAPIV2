@@ -38,8 +38,7 @@ namespace AttendanceAPIV2.Controllers
             }
 
             var folders = await _context.Folders
-                .Where(p => p.User_Id == userId)
-                .Select(p => new { p.FolderName ,p.FolderPath })
+                .Where(p => p.User_Id == userId && p.ParentFolder==null)
                 .ToListAsync();
 
             return Ok(folders);
@@ -59,6 +58,7 @@ namespace AttendanceAPIV2.Controllers
                .Where(p => p.FolderId == id)
                .Select(p => new FolderDataDto
                {
+                   FolderId= p.FolderId,
                    FolderName = p.FolderName,
                    FolderPath = p.FolderPath,
                    creator = p.User.UserName,
@@ -173,13 +173,13 @@ namespace AttendanceAPIV2.Controllers
             _context.Add(folder);
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Folder created successfully." });
-            //if (id != null)
-            //{
-            //    return CreatedAtAction(nameof(GetFolderData), new { id = folder.ParentFolderId }, folder);
+            //return Ok(new { message = "Folder created successfully." });
+            if (id != null)
+            {
+                return CreatedAtAction(nameof(GetFolderData), new { id = folder.ParentFolderId }, folder);
 
-            //}
-            //return CreatedAtAction(nameof(GetFolderData), new { id = folder.FolderId }, folder);
+            }
+            return CreatedAtAction(nameof(GetFolderData), new { id = folder.FolderId }, folder);
         }
 
        

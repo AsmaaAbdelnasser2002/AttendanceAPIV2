@@ -8,6 +8,7 @@ namespace AttendanceAPIV2.Models.DTOs
 {
     public class SessionDataDto
     {
+        public int SessionId { get; set; }
         public string SessionName { get; set; }
         public string SessionPlace { get; set; }
 

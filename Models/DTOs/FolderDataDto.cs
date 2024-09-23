@@ -4,6 +4,7 @@ namespace AttendanceAPIV2.Models.DTOs
 {
     public class FolderDataDto
     {
+        public int FolderId { get; set; }
         public string FolderName { get; set; }
 
         public string FolderPath { get; set; }

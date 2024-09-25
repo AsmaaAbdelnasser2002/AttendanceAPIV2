@@ -4,6 +4,7 @@ using AttendanceAPIV2.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AttendanceAPIV2.Migrations
 {
     [DbContext(typeof(AttendanceContext))]
-    partial class AttendanceContextModelSnapshot : ModelSnapshot
+    [Migration("20240925201654_init3")]
+    partial class init3
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -139,9 +141,6 @@ namespace AttendanceAPIV2.Migrations
 
                     b.Property<DateTime>("EndTime")
                         .HasColumnType("datetime2");
-
-                    b.Property<int>("Expired")
-                        .HasColumnType("int");
 
                     b.Property<byte[]>("FacesFolder")
                         .HasColumnType("varbinary(max)");

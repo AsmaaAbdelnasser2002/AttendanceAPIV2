@@ -16,7 +16,7 @@ using Newtonsoft.Json;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-
+using System.Text;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -215,11 +215,36 @@ public class FaceRecognitionController : ControllerBase
                 return NotFound("Attendance record not found for the specified user and session.");
             }
 
-            // Modify the properties as needed
-            attendanceRecord.TimeIn = DateTime.Now; // Update time in if needed
-            attendanceRecord.Status = AttendanceStatus.Present; // Set the desired status                                      
-            // Save the changes to the database
-            await _context.SaveChangesAsync();
+            var session = await _context.Sessions.FindAsync(sessionId);
+            if (session.TimeLimit <= DateTime.Now)
+            {
+                // Modify the properties as needed
+                attendanceRecord.TimeIn = DateTime.Now; // Update time in if needed
+                attendanceRecord.Status = AttendanceStatus.Present; // Set the desired status                                      
+                                                                    // Save the changes to the database
+                await _context.SaveChangesAsync();
+
+
+                var message = new StringBuilder();
+                message.AppendLine($"You presented session: {session.SessionName}");
+
+                var notification = new Notification
+                {
+                    UserId = userId2,
+                    Message = message.ToString(),
+                    CreatedAt = DateTime.UtcNow,
+                    IsRead = false
+                };
+
+                _context.Notifications.Add(notification);
+                await _context.SaveChangesAsync();
+
+               // return Ok(new { message = "Attendance recorded successfully." });
+            }
+            else
+            {
+               // return Ok(new { message = "You passed the time limit." });
+            }
 
         }
        

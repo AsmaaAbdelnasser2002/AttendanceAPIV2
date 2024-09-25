@@ -13,6 +13,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using OfficeOpenXml.Style;
 using System.Data;
+using AttendanceAPIV2.Enums;
+using OfficeOpenXml;
 
 namespace AttendanceAPIV2.Controllers
 {
@@ -28,8 +30,8 @@ namespace AttendanceAPIV2.Controllers
         }
 
         // GET: api/Folders
-        [HttpGet("GetFolders")]
-        public async Task<ActionResult<IEnumerable<Folder>>> GetFolders()
+        [HttpGet("GetParentFolders")]
+        public async Task<ActionResult<IEnumerable<Folder>>> GetParentFolders()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId == null)
@@ -173,13 +175,16 @@ namespace AttendanceAPIV2.Controllers
             _context.Add(folder);
             await _context.SaveChangesAsync();
 
-            //return Ok(new { message = "Folder created successfully." });
-            if (id != null)
-            {
-                return CreatedAtAction(nameof(GetFolderData), new { id = folder.ParentFolderId }, folder);
+            ////return Ok(new { message = "Folder created successfully." });
+            //if (id != null)
+            //{
+            //    return CreatedAtAction(nameof(GetFolderData), new { id = folder.ParentFolderId });
 
-            }
-            return CreatedAtAction(nameof(GetFolderData), new { id = folder.FolderId }, folder);
+            //}
+
+            // return CreatedAtAction(nameof(GetFolderData), new { id = folder.FolderId });
+
+            return Ok(new { message = "Folder created successfully.", folderId = folder.FolderId });
         }
 
        
@@ -539,6 +544,112 @@ namespace AttendanceAPIV2.Controllers
             }
 
             return File(folder.VoicesFolder, "application/x-rar-compressed", "voicesfolder.rar");
+        }
+
+        [HttpGet("FolderReport/{folderId}")]
+        public async Task<IActionResult> GetFolderReport(int folderId)
+        {
+            // Find the folder
+            var folder = await _context.Folders.FindAsync(folderId);
+            if (folder == null)
+            {
+                return NotFound();
+            }
+
+            // Count the number of sessions in the folder
+            var sessionCount = await _context.Sessions
+                .Where(s => s.Folder_Id == folderId)
+                .CountAsync();
+
+            // Get the attendance records for the folder's sessions
+            var attendanceRecords = _context.AttendanceRecords
+                .Where(ar => ar.Session.Folder_Id == folderId)
+                .Include(ar => ar.User) // Include the user for name
+                .ToList();
+
+            // Group the records by user and calculate attendance counts
+            var attendanceSummary = attendanceRecords
+                .GroupBy(ar => ar.User)
+                .Select(g => new
+                {
+                    StudentName = g.Key.UserName,
+                    PresentCount = g.Count(ar => ar.Status == AttendanceStatus.Present),
+                    AbsentCount = g.Count(ar => ar.Status == AttendanceStatus.Absent)
+                })
+                .ToList();
+
+            // Return the session count and the attendance summary
+            return Ok(new
+            {
+                SessionCount = sessionCount,
+                AttendanceSummary = attendanceSummary
+            });
+        }
+
+        [HttpGet("FolderReportExcel/{folderId}")]
+        public async Task<IActionResult> GetFolderReportExcel(int folderId)
+        {
+            // Find the folder
+            var folder = await _context.Folders.FindAsync(folderId);
+            if (folder == null)
+            {
+                return NotFound();
+            }
+
+            // Count the number of sessions in the folder
+            var sessionCount = await _context.Sessions
+                .Where(s => s.Folder_Id == folderId)
+                .CountAsync();
+
+            // Get the attendance records for the folder's sessions
+            var attendanceRecords = _context.AttendanceRecords
+                .Where(ar => ar.Session.Folder_Id == folderId)
+                .Include(ar => ar.User) // Include the user for name
+                .ToList();
+
+            // Group the records by user and calculate attendance counts
+            var attendanceSummary = attendanceRecords
+                .GroupBy(ar => ar.User)
+                .Select(g => new
+                {
+                    StudentName = g.Key.UserName,
+                    PresentCount = g.Count(ar => ar.Status == AttendanceStatus.Present),
+                    AbsentCount = g.Count(ar => ar.Status == AttendanceStatus.Absent)
+                })
+                .ToList();
+
+            // Create a new Excel package
+            using (var package = new ExcelPackage())
+            {
+                // Add a new worksheet
+                var worksheet = package.Workbook.Worksheets.Add("Folder Report");
+
+                // Add header row
+                worksheet.Cells[1, 1].Value = "Session Count";
+                worksheet.Cells[1, 2].Value = sessionCount;
+
+                // Add column headers for attendance summary
+                worksheet.Cells[3, 1].Value = "Student Name";
+                worksheet.Cells[3, 2].Value = "Present Count";
+                worksheet.Cells[3, 3].Value = "Absent Count";
+
+                // Populate attendance summary
+                int row = 4; // Starting from the fourth row
+                foreach (var record in attendanceSummary)
+                {
+                    worksheet.Cells[row, 1].Value = record.StudentName;
+                    worksheet.Cells[row, 2].Value = record.PresentCount;
+                    worksheet.Cells[row, 3].Value = record.AbsentCount;
+                    row++;
+                }
+
+                // Set the content type and file name
+                var stream = new MemoryStream();
+                package.SaveAs(stream);
+                stream.Position = 0;
+
+                return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "FolderReport.xlsx");
+            }
         }
     }
 }

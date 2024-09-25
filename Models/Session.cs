@@ -5,6 +5,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using AttendanceAPIV2.Enums;
 
 namespace AttendanceAPIV2.Models
 {
@@ -38,7 +39,9 @@ namespace AttendanceAPIV2.Models
         public DateTime EndTime { get; set; }
 
         public DateTime TimeLimit { get; set; }
-       
+
+
+        public ExpiredSession Expired { get; set; }
 
         [ForeignKey("User")]
         public string User_Id { get; set; }

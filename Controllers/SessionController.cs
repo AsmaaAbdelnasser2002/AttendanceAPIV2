@@ -5,6 +5,10 @@ using AttendanceAPIV2.Models;
 using AttendanceAPIV2.Models.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using AttendanceAPIV2.Enums;
+using System.Net.Http;
+using OfficeOpenXml;
+using System.Text;
 
 namespace AttendanceAPIV2.Controllers
 {
@@ -14,9 +18,75 @@ namespace AttendanceAPIV2.Controllers
     public class SessionController : ControllerBase
     {
         private readonly AttendanceContext _context;
-        public SessionController(AttendanceContext context)
+        private readonly IHttpClientFactory _httpClientFactory;
+
+        public SessionController(IHttpClientFactory httpClientFactory, AttendanceContext context)
         {
             _context = context;
+            _httpClientFactory = httpClientFactory;
+        }
+
+
+        [HttpPost("AddFromSession/{sessionId}")]
+        public async Task<IActionResult> AddAttendanceRecordsFromSession(int sessionId)
+        {
+            try
+            {
+                // Fetch the session from the database
+                var session = _context.Sessions.Find(sessionId);
+                if (session == null || session.Sheet == null)
+                {
+                    return NotFound("Session not found or sheet is empty.");
+                }
+
+                // Read the Excel file from the binary data
+                using (var stream = new MemoryStream(session.Sheet))
+                using (var package = new ExcelPackage(stream))
+                {
+                    var worksheet = package.Workbook.Worksheets.FirstOrDefault(); // Get the first worksheet or null
+
+                    if (worksheet == null || worksheet.Dimension == null)
+                    {
+                        return BadRequest("The Excel sheet is empty or does not contain any data.");
+                    }
+
+                    var attendanceRecords = new List<AttendanceRecord>();
+
+                    // Check the number of rows and start processing
+                    for (int row = 2; row <= worksheet.Dimension.End.Row; row++) // Start from row 2 if row 1 is headers
+                    {
+                        var studentId = worksheet.Cells[row, 1].Text; // Assuming ID is in column 1
+                        var us = await _context.Users.FindAsync(studentId);
+
+                        if (!string.IsNullOrEmpty(studentId) && us != null)
+                        {
+                            attendanceRecords.Add(new AttendanceRecord
+                            {
+                                TimeIn = DateTime.Now, // Set the current time
+                                Status = AttendanceStatus.Absent,
+                                UserId = studentId,
+                                SessionId = sessionId
+                            });
+                        }
+                    }
+
+                    // Check if any attendance records were created
+                    if (attendanceRecords.Count == 0)
+                    {
+                        return BadRequest("No valid student IDs found in the Excel sheet.");
+                    }
+
+                    // Add records to the database
+                    _context.AttendanceRecords.AddRange(attendanceRecords);
+                    _context.SaveChanges();
+                }
+
+                return Ok("Attendance records added successfully.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
         }
 
         [HttpPost("create")]
@@ -41,13 +111,13 @@ namespace AttendanceAPIV2.Controllers
                 SessionDescription = sessionDto.SessionDescription,
                 StartTime = sessionDto.StartTime,
                 EndTime = sessionDto.EndTime,
-                SessionPlace=sessionDto.SessionPlace,
+                SessionPlace = sessionDto.SessionPlace,
                 TimeLimit = sessionDto.TimeLimit
             };
             if (foldreId != null)
             {
                 var folder = await _context.Folders.FindAsync(foldreId);
-                if (sessionDto.FacesFolder != null)
+                if (sessionDto.FacesFolder != null && folder.FacesFolder == null)
                 {
                     using var stream1 = new MemoryStream();
                     await sessionDto.FacesFolder.CopyToAsync(stream1);
@@ -57,7 +127,7 @@ namespace AttendanceAPIV2.Controllers
                 {
                     session.FacesFolder = folder.FacesFolder;
                 }
-                if (sessionDto.VoicesFolder != null)
+                if (sessionDto.VoicesFolder != null && folder.VoicesFolder == null)
                 {
                     using var stream2 = new MemoryStream();
                     await sessionDto.VoicesFolder.CopyToAsync(stream2);
@@ -68,16 +138,17 @@ namespace AttendanceAPIV2.Controllers
                     session.VoicesFolder = folder.VoicesFolder;
 
                 }
-                if (sessionDto.Sheet != null)
-                {
-                    using var stream3 = new MemoryStream();
-                    await sessionDto.Sheet.CopyToAsync(stream3);
-                    session.Sheet = stream3.ToArray();
-                }
-                else
-                {
-                    session.Sheet = folder.Sheet;
-                }
+                session.Sheet = folder.Sheet;
+                //if (sessionDto.Sheet != null)
+                //{
+                //    using var stream3 = new MemoryStream();
+                //    await sessionDto.Sheet.CopyToAsync(stream3);
+                //    session.Sheet = stream3.ToArray();
+                //}
+                //else
+                //{
+                //    session.Sheet = folder.Sheet;
+                //}
             }
             else
             {
@@ -113,7 +184,47 @@ namespace AttendanceAPIV2.Controllers
             _context.Sessions.Add(session);
             await _context.SaveChangesAsync();
 
-            return Ok(session);
+            //// Call AddAttendanceRecordsFromSession method after saving the session
+            //return await AddAttendanceRecordsFromSession(session.SessionId);
+
+            // Read Excel File and save it in record
+            var re = await AddAttendanceRecordsFromSession(session.SessionId);
+            if (re != null)
+            {
+                // Add a notification for a specific user
+                List<AttendanceRecord> attendanceRecords = _context.AttendanceRecords.
+                    Where(x => x.SessionId == session.SessionId).ToList();
+
+                // Create the message string
+                var message = new StringBuilder();
+                message.AppendLine($"You are added to this session");
+                message.AppendLine($"Session Name: {session.SessionName}");
+                message.AppendLine($"Session Place: {session.SessionPlace}");
+                message.AppendLine($"Session Description: {session.SessionDescription}");
+                message.AppendLine($"Start Time: {session.StartTime}");
+                message.AppendLine($"End Time: {session.EndTime}");
+                message.AppendLine($"Time Limit: {session.TimeLimit}");
+                if (session.Folder_Id != null)
+                { message.AppendLine($"Folder Path: {session.Folder.FolderPath}"); }
+                foreach (var item in attendanceRecords)
+                {
+                    if (item != null)
+                    {
+                        var notification = new Notification
+                        {
+                            UserId = item.UserId,
+                            Message = message.ToString(),
+                            CreatedAt = DateTime.UtcNow,
+                            IsRead = false
+                        };
+
+                        _context.Notifications.Add(notification);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+            }
+
+            return Ok(new { id = session.SessionId });
         }
 
 
@@ -127,6 +238,7 @@ namespace AttendanceAPIV2.Controllers
             }
 
             var sessionSummaries = await _context.Sessions
+                .Where(s => s.Folder_Id==null)
                 .Select(p => new SessionListDto
                 {
                     SessionId=p.SessionId,
@@ -226,19 +338,19 @@ namespace AttendanceAPIV2.Controllers
             { session.EndTime = editSessionDto.EndTime; }
             if(editSessionDto.TimeLimit!=null)
             { session.TimeLimit = editSessionDto.TimeLimit; }
-            if (editSessionDto.FacesFolder != null)
+            if (editSessionDto.FacesFolder != null && session.Folder_Id == null)
             {
                 using var stream1 = new MemoryStream();
                 await editSessionDto.FacesFolder.CopyToAsync(stream1);
                 session.FacesFolder = stream1.ToArray();
             }
-            if (editSessionDto.VoicesFolder != null)
+            if (editSessionDto.VoicesFolder != null && session.Folder_Id == null)
             {
                 using var stream2 = new MemoryStream();
                 await editSessionDto.VoicesFolder.CopyToAsync(stream2);
                 session.VoicesFolder = stream2.ToArray();
             }
-            if (editSessionDto.Sheet != null)
+            if (editSessionDto.Sheet != null && session.Folder_Id == null)
             {
                 using var stream3 = new MemoryStream();
                 await editSessionDto.Sheet.CopyToAsync(stream3);
@@ -338,7 +450,117 @@ namespace AttendanceAPIV2.Controllers
             return File(session.VoicesFolder, "application/x-rar-compressed", "voicesfolder.rar");
         }
 
+        [HttpGet("SessionReport/{sessionId}")]
+        public async Task<IActionResult> GetSessionReport(int sessionId)
+        {
+            var session = await _context.Sessions.FindAsync(sessionId);
+            if (session == null)
+            {
+                return NotFound();
+            }
+            var attendanceRecords = _context.AttendanceRecords
+                .Where(ar => ar.SessionId == sessionId)
+                .Include(ar => ar.Session)
+                .Include(ar => ar.User)
+                .ToList();
 
+            var attendedOnTime = attendanceRecords
+                .Where(ar => ar.Status == AttendanceStatus.Present && ar.TimeIn <= ar.Session.StartTime)
+                .Select(ar => ar.User.UserName)
+                .ToList();
+
+            var lateAttendees = attendanceRecords
+                .Where(ar => ar.Status == AttendanceStatus.Present && ar.TimeIn > ar.Session.StartTime)
+                .Select(ar => ar.User.UserName)
+                .ToList();
+
+            var absentAttendees = attendanceRecords
+                .Where(ar => ar.Status == AttendanceStatus.Absent)
+                .Select(ar => ar.User.UserName)
+                .ToList();
+            return Ok(new
+            {
+                AttendedOnTime = attendedOnTime,
+                LateAttendees = lateAttendees,
+                AbsentAttendees = absentAttendees
+            });
+
+        }
+
+        [HttpGet("SessionReportExcel/{sessionId}")]
+        public async Task<IActionResult> GetSessionReportExcel(int sessionId)
+        {
+            var session = await _context.Sessions.FindAsync(sessionId);
+            if (session == null)
+            {
+                return NotFound();
+            }
+
+            var attendanceRecords = _context.AttendanceRecords
+                .Where(ar => ar.SessionId == sessionId)
+                .Include(ar => ar.Session)
+                .Include(ar => ar.User)
+                .ToList();
+
+            var attendedOnTime = attendanceRecords
+                .Where(ar => ar.Status == AttendanceStatus.Present && ar.TimeIn <= ar.Session.StartTime)
+                .Select(ar => ar.User.UserName)
+                .ToList();
+
+            var lateAttendees = attendanceRecords
+                .Where(ar => ar.Status == AttendanceStatus.Present && ar.TimeIn > ar.Session.StartTime)
+                .Select(ar => ar.User.UserName)
+                .ToList();
+
+            var absentAttendees = attendanceRecords
+                .Where(ar => ar.Status == AttendanceStatus.Absent)
+                .Select(ar => ar.User.UserName)
+                .ToList();
+
+            // Create a new Excel package
+            using (var package = new ExcelPackage())
+            {
+                // Add a new worksheet
+                var worksheet = package.Workbook.Worksheets.Add("Attendance Report");
+
+                // Add header row
+                worksheet.Cells[1, 1].Value = "Status";
+                worksheet.Cells[1, 2].Value = "User Name";
+
+                // Add attended on time data
+                int row = 2;
+                foreach (var username in attendedOnTime)
+                {
+                    worksheet.Cells[row, 1].Value = "On Time";
+                    worksheet.Cells[row, 2].Value = username;
+                    row++;
+                }
+
+                // Add late attendees data
+                foreach (var username in lateAttendees)
+                {
+                    worksheet.Cells[row, 1].Value = "Late";
+                    worksheet.Cells[row, 2].Value = username;
+                    row++;
+                }
+
+                // Add absent attendees data
+                foreach (var username in absentAttendees)
+                {
+                    worksheet.Cells[row, 1].Value = "Absent";
+                    worksheet.Cells[row, 2].Value = username;
+                    row++;
+                }
+
+                // Set the content type and file name
+                var stream = new MemoryStream();
+                package.SaveAs(stream);
+                stream.Position = 0;
+
+                return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "SessionReport.xlsx");
+            }
+        }
 
     }
+    
 }

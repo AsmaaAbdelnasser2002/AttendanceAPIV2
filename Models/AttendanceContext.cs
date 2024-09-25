@@ -21,8 +21,10 @@ namespace AttendanceAPIV2.Models
         public DbSet<Session> Sessions { get; set; }
         public DbSet<AttendanceRecord> AttendanceRecords { get; set; }
 		public DbSet<SessionQrCode> SessionQRCodes { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
 
-		protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             var connectionString = "Data Source=DESKTOP-LU175Q4\\SQLEXPRESS01;Initial Catalog=AttendanceV2;Integrated Security=True; Trusted_Connection=True; TrustServerCertificate=True; MultipleActiveResultSets=true";
 

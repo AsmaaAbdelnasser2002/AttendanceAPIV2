@@ -8,6 +8,7 @@ using OfficeOpenXml;
 using AttendanceAPIV2.Interfces;
 using Microsoft.AspNetCore.Authorization;
 using ClosedXML.Excel;
+using System.Text;
 
 namespace AttendanceAPIV2.Controllers
 {
@@ -30,67 +31,7 @@ namespace AttendanceAPIV2.Controllers
         }
 
 
-        [HttpPost("AddFromSession/{sessionId}")]
-        public async Task<IActionResult> AddAttendanceRecordsFromSession(int sessionId)
-        {
-            try
-            {
-                // Fetch the session from the database
-                var session = _context.Sessions.Find(sessionId);
-                if (session == null || session.Sheet == null)
-                {
-                    return NotFound("Session not found or sheet is empty.");
-                }
-
-                // Read the Excel file from the binary data
-                using (var stream = new MemoryStream(session.Sheet))
-                using (var package = new ExcelPackage(stream))
-                {
-                    var worksheet = package.Workbook.Worksheets.FirstOrDefault(); // Get the first worksheet or null
-
-                    if (worksheet == null || worksheet.Dimension == null)
-                    {
-                        return BadRequest("The Excel sheet is empty or does not contain any data.");
-                    }
-
-                    var attendanceRecords = new List<AttendanceRecord>();
-
-                    // Check the number of rows and start processing
-                    for (int row = 2; row <= worksheet.Dimension.End.Row; row++) // Start from row 2 if row 1 is headers
-                    {
-                        var studentId = worksheet.Cells[row, 1].Text; // Assuming ID is in column 1
-                        var us=await _context.Users.FindAsync(studentId);
-
-                        if (!string.IsNullOrEmpty(studentId) && us!=null)
-                        {
-                            attendanceRecords.Add(new AttendanceRecord
-                            {
-                                TimeIn = DateTime.Now, // Set the current time
-                                Status = AttendanceStatus.Absent,
-                                UserId = studentId,
-                                SessionId = sessionId
-                            });
-                        }
-                    }
-
-                    // Check if any attendance records were created
-                    if (attendanceRecords.Count == 0)
-                    {
-                        return BadRequest("No valid student IDs found in the Excel sheet.");
-                    }
-
-                    // Add records to the database
-                    _context.AttendanceRecords.AddRange(attendanceRecords);
-                    _context.SaveChanges();
-                }
-
-                return Ok("Attendance records added successfully.");
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Internal server error: {ex.Message}");
-            }
-        }
+        
 
         [HttpGet("GenerateQRCode/{sessionId}")]
         public async Task<IActionResult> GenerateQRCode(int sessionId)
@@ -140,14 +81,36 @@ namespace AttendanceAPIV2.Controllers
             {
                 return NotFound("Attendance record not found for the specified user and session.");
             }
+            var session = await _context.Sessions.FindAsync(checkInRequest.SessionId);
+            if (session.TimeLimit <= DateTime.Now)
+            {
+                // Modify the properties as needed
+                attendanceRecord.TimeIn = DateTime.Now; // Update time in if needed
+                attendanceRecord.Status = AttendanceStatus.Present; // Set the desired status                                      
+                                                                    // Save the changes to the database
+                await _context.SaveChangesAsync();
 
-            // Modify the properties as needed
-            attendanceRecord.TimeIn = DateTime.Now; // Update time in if needed
-            attendanceRecord.Status = AttendanceStatus.Present; // Set the desired status                                      
-            // Save the changes to the database
-            await _context.SaveChangesAsync();
+                var message = new StringBuilder();
+                message.AppendLine($"You presented session: {session.SessionName}");
 
-            return Ok(new { message = "Attendance recorded successfully." });
+                var notification = new Notification
+                {
+                    UserId = checkInRequest.UserId,
+                    Message = message.ToString(),
+                    CreatedAt = DateTime.UtcNow,
+                    IsRead = false
+                };
+
+                _context.Notifications.Add(notification);
+                await _context.SaveChangesAsync();
+
+
+                return Ok(new { message = "Attendance recorded successfully." });
+            }
+            else 
+            {
+                return Ok(new { message = "You passed the time limit." });
+            }
         }
 
         [HttpPost("CheckInOut")]
@@ -236,7 +199,21 @@ namespace AttendanceAPIV2.Controllers
                                                                             // Save the changes to the database
                         await _context.SaveChangesAsync();
 
-                      
+
+                        var message = new StringBuilder();
+                        message.AppendLine($"You presented session: {session.SessionName}");
+
+                        var notification = new Notification
+                        {
+                            UserId = userId,
+                            Message = message.ToString(),
+                            CreatedAt = DateTime.UtcNow,
+                            IsRead = false
+                        };
+
+                        _context.Notifications.Add(notification);
+                        await _context.SaveChangesAsync();
+
                         return Ok("Attendance marked successfully.");
                     }
                     else

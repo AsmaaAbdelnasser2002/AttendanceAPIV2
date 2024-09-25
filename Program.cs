@@ -35,6 +35,8 @@ namespace AttendanceAPIV2
 
             builder.Services.AddSingleton<QRCodeService>();
             builder.Services.AddHostedService<QRCodeRegenerationService>();
+            builder.Services.AddHostedService<SessionCheckService>();
+
 
             var app = builder.Build();
 

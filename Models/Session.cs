@@ -43,9 +43,11 @@ namespace AttendanceAPIV2.Models
 
         public ExpiredSession Expired { get; set; }
 
+        public int? ExamId { get; set; } 
+
         [ForeignKey("User")]
-        public string User_Id { get; set; }
-        public virtual User User { get; set; }
+        public string? User_Id { get; set; }
+        public virtual User? User { get; set; }
 
         [ForeignKey("Folder")]
         public int? Folder_Id { get; set; }

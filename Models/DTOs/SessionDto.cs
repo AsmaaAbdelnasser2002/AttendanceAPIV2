@@ -36,6 +36,5 @@ namespace AttendanceAPIV2.Models.DTOs
 
         public DateTime TimeLimit { get; set; }
 
-        //public string? NameOfSequance { get; set; }
     }
 }

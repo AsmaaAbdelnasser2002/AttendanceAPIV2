@@ -33,10 +33,25 @@ namespace AttendanceAPIV2.Controllers
 
         
 
-        [HttpGet("GenerateQRCode/{sessionId}")]
-        public async Task<IActionResult> GenerateQRCode(int sessionId)
+        [HttpGet("GenerateQRCode")]
+        public async Task<IActionResult> GenerateQRCode([FromQuery] int? sessionId, [FromQuery] int? examId)
+        //public async Task<IActionResult> GenerateQRCode(int sessionId)
         {
-            var session = await _context.Sessions.FindAsync(sessionId);
+            if (sessionId == null && examId == null)
+            {
+                return BadRequest("sessionId is required.");
+            }
+            int id;
+            if (examId != null)
+            {
+                var sessionId2 = await _context.Sessions.Where(i => i.ExamId == examId).Select(i => i.SessionId).FirstOrDefaultAsync();
+                id = sessionId2;
+            }
+            else
+            {
+                id = sessionId.Value;
+            }
+            var session = await _context.Sessions.FindAsync(id);
             if (session == null) return NotFound("Session not found.");
 
             string qrCodeData = $"{sessionId}-{Guid.NewGuid()}";
@@ -44,10 +59,10 @@ namespace AttendanceAPIV2.Controllers
 
             var sessionQRCode = new SessionQrCode
             {
-                SessionId = sessionId,
+                SessionId = id,
                 Code = qrCode,
                 GeneratedAt = DateTime.Now,
-                ExpiresAt = DateTime.Now.AddSeconds(30)
+                ExpiresAt = DateTime.Now.AddMinutes(5)
             };
             _context.SessionQRCodes.Add(sessionQRCode);
             await _context.SaveChangesAsync();
@@ -70,19 +85,20 @@ namespace AttendanceAPIV2.Controllers
             }
 
             // Validate the user
-            var user = await _context.Users.FindAsync(checkInRequest.UserId);
+            var user = await _context.Users.Where(i => i.ExaminerId == checkInRequest.UserId).Select(i => i.Id).FirstOrDefaultAsync();
+            //var user = await _context.Users.FindAsync(checkInRequest.UserId);
             if (user == null)
             {
                 return BadRequest("User not found.");
             }
 
-            var attendanceRecord = await _context.AttendanceRecords.FirstOrDefaultAsync(x => x.UserId == checkInRequest.UserId && x.SessionId == checkInRequest.SessionId);
+            var attendanceRecord = await _context.AttendanceRecords.FirstOrDefaultAsync(x => x.UserId == user && x.SessionId == checkInRequest.SessionId);
             if (attendanceRecord == null)
             {
                 return NotFound("Attendance record not found for the specified user and session.");
             }
             var session = await _context.Sessions.FindAsync(checkInRequest.SessionId);
-            if (session.TimeLimit <= DateTime.Now)
+            if (session.TimeLimit >= DateTime.Now)
             {
                 // Modify the properties as needed
                 attendanceRecord.TimeIn = DateTime.Now; // Update time in if needed
@@ -95,7 +111,7 @@ namespace AttendanceAPIV2.Controllers
 
                 var notification = new Notification
                 {
-                    UserId = checkInRequest.UserId,
+                    UserId = user,
                     Message = message.ToString(),
                     CreatedAt = DateTime.UtcNow,
                     IsRead = false
@@ -229,6 +245,41 @@ namespace AttendanceAPIV2.Controllers
             }
         }
 
-       
+        [HttpGet("Exam_Attendance")]
+        public async Task<IActionResult> Exam_Attendance([FromQuery] int examId)
+        {
+            // Step 1: Find the session ID associated with the given examId
+            var sessionId = await _context.Sessions
+                .Where(s => s.ExamId == examId)
+                .Select(s => s.SessionId)
+                .FirstOrDefaultAsync();
+
+            if (sessionId == 0) // Check if the session exists
+            {
+                return NotFound("No session found for the provided examId.");
+            }
+
+            // Step 2: Retrieve all attendance records for the found session
+            var attendanceRecords = await _context.AttendanceRecords
+                .Where(ar => ar.SessionId == sessionId)
+                .ToListAsync();
+
+            // Step 3: Create a lookup dictionary for attendance status by UserId
+            var attendanceStatus = attendanceRecords.ToDictionary(ar => ar.UserId, ar => ar.Status);
+
+            // Step 4: Get the examiner ID and attendance status for each user
+            var examiners = await _context.Users
+                .Where(u => attendanceStatus.Keys.Contains(u.Id))
+                .Select(u => new
+                {
+                    u.ExaminerId,
+                    AttendanceStatus = attendanceStatus[u.Id] == 0 ? "Present" : "Absent" // Change to "Present" or "Absent"
+                })
+                .ToListAsync();
+
+            // Step 5: Return the list of examiners with their corresponding attendance status
+            return Ok(examiners);
+        }
+
     }
 }

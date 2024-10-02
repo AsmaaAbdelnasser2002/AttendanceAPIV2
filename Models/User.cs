@@ -25,8 +25,10 @@ namespace AttendanceAPIV2.Models
         //Instructor or Attender 
         public string UserRole { get; set; }
 
+        public string? ExaminerId { get; set; }  
+
         public virtual List<AttendanceRecord> AttendanceRecords { get; set; }
         public virtual List<Folder> Sequances { get; set; }
-        public virtual List<Session> Sessions { get; set; }
+        public virtual List<Session>? Sessions { get; set; }
     }
 }

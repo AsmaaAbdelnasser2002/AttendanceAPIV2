@@ -9,6 +9,7 @@ using AttendanceAPIV2.Enums;
 using System.Net.Http;
 using OfficeOpenXml;
 using System.Text;
+using Microsoft.AspNetCore.Identity;
 
 namespace AttendanceAPIV2.Controllers
 {
@@ -19,11 +20,13 @@ namespace AttendanceAPIV2.Controllers
     {
         private readonly AttendanceContext _context;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly UserManager<User> _userManager;
 
-        public SessionController(IHttpClientFactory httpClientFactory, AttendanceContext context)
+        public SessionController(UserManager<User> userManager, IHttpClientFactory httpClientFactory, AttendanceContext context)
         {
             _context = context;
             _httpClientFactory = httpClientFactory;
+            _userManager = userManager;
         }
 
 
@@ -88,22 +91,123 @@ namespace AttendanceAPIV2.Controllers
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
         }
+      
+        [HttpPost("ProcessExcelAndCreateUsers/{sessionId}")]
+        public async Task<IActionResult> ProcessExcelAndCreateUsers(int sessionId)
+        {
+            // Retrieve the session
+            var session = await _context.Sessions.FindAsync(sessionId);
+            if (session == null || session.Sheet == null)
+            {
+                return NotFound("Session or Excel data not found.");
+            }
+
+            // Load the binary Excel data from the session
+            using var memoryStream = new MemoryStream(session.Sheet);
+            using var package = new ExcelPackage(memoryStream);
+
+            // Get the first worksheet in the Excel file
+            var worksheet = package.Workbook.Worksheets.FirstOrDefault();
+            if (worksheet == null)
+            {
+                return BadRequest("No worksheet found in the Excel file.");
+            }
+
+            // Iterate through the rows of the worksheet (starting at row 2 to skip headers)
+            for (int row = 2; row <= worksheet.Dimension.End.Row; row++)
+            {
+                var existingId = worksheet.Cells[row, 1].Text;
+
+                if (string.IsNullOrWhiteSpace(existingId))
+                {
+                    continue; // Skip if no ID
+                }
+
+                // Parse the age from column 5 (E)
+                int age;
+                if (!int.TryParse(worksheet.Cells[row, 5].Text, out age))
+                {
+                    age = 18; // Default age
+                }
+
+                // Check if the user already exists based on the ExaminerId
+                var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.ExaminerId == existingId);
+
+                if (existingUser == null)
+                {
+                    // Create a new User object
+                    var newUser = new User
+                    {
+                        UserName = worksheet.Cells[row, 2].Text,
+                        Email = worksheet.Cells[row, 3].Text,
+                        Age = age,
+                        Gender = worksheet.Cells[row, 6].Text,
+                        UserRole = "Attender",
+                        ExaminerId = existingId // This will be used to identify the user
+                    };
+
+                    // Attempt to create the user
+                    IdentityResult result = await _userManager.CreateAsync(newUser, worksheet.Cells[row, 4].Text); // Password from column 4
+                    if (result.Succeeded)
+                    {
+                        // The user is already added to the Users table, save changes
+                        await _context.SaveChangesAsync();
+
+                        // Replace the existing ID in the sheet with the newly generated UserId
+                        worksheet.Cells[row, 1].Value = newUser.Id; // Store the new ID in the Excel sheet
+                    }
+                    else
+                    {
+                        // Log or handle the error accordingly
+                        return BadRequest("Error creating user: " + string.Join(", ", result.Errors.Select(e => e.Description)));
+                    }
+                }
+                else
+                {
+                    // If the user already exists, use the existing user ID
+                    worksheet.Cells[row, 1].Value = existingUser.Id; // Replace with the existing user's ID
+                }
+            }
+
+            // Save the modified Excel file to a new memory stream
+            var updatedExcelStream = new MemoryStream();
+            package.SaveAs(updatedExcelStream);
+
+            session.Sheet = updatedExcelStream.ToArray();
+
+            _context.Sessions.Update(session);
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
 
         [HttpPost("create")]
-        public async Task<IActionResult> createSession([FromForm] SessionDto sessionDto, [FromQuery] int? foldreId)
+        public async Task<IActionResult> createSession([FromForm] SessionDto sessionDto, [FromQuery] int? foldreId, [FromQuery] int? examId)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId == null)
-            {
-                return BadRequest(new { message = "Please login First." });
-            }
 
-            var user = _context.Users.FirstOrDefault(u => u.Id == userId && u.UserRole == "Instructor");
-            if (user == null)
+            if (examId == null)
             {
-                return BadRequest(new { message = "You are not authorized, please login with an Instructor account." });
-            }
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (userId == null)
+                {
+                    return BadRequest(new { message = "Please login First." });
+                }
+                var user = _context.Users.FirstOrDefault(u => u.Id == userId && u.UserRole == "Instructor");
+                if (user == null)
+                {
+                    return BadRequest(new { message = "You are not authorized, please login with an Instructor account." });
+                }
 
+            }
+            else
+            {
+                var id = await _context.Sessions.Where(i => i.ExamId == examId).FirstOrDefaultAsync();
+                if (id != null)
+                {
+                    return BadRequest(new { message = "This exam session is already exist." });
+                }
+            }
             // Create and save the session
             var session = new Session
             {
@@ -114,6 +218,8 @@ namespace AttendanceAPIV2.Controllers
                 SessionPlace = sessionDto.SessionPlace,
                 TimeLimit = sessionDto.TimeLimit
             };
+            session.ExamId = examId;
+            
             if (foldreId != null)
             {
                 var folder = await _context.Folders.FindAsync(foldreId);
@@ -139,16 +245,7 @@ namespace AttendanceAPIV2.Controllers
 
                 }
                 session.Sheet = folder.Sheet;
-                //if (sessionDto.Sheet != null)
-                //{
-                //    using var stream3 = new MemoryStream();
-                //    await sessionDto.Sheet.CopyToAsync(stream3);
-                //    session.Sheet = stream3.ToArray();
-                //}
-                //else
-                //{
-                //    session.Sheet = folder.Sheet;
-                //}
+              
             }
             else
             {
@@ -179,13 +276,18 @@ namespace AttendanceAPIV2.Controllers
                     return BadRequest(new { message = "upload one file at least." });
                 }
             }
-            session.User_Id = userId;
+
+            if (examId == null)
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                session.User_Id = userId;
+            }
             session.Folder_Id = foldreId;
             _context.Sessions.Add(session);
             await _context.SaveChangesAsync();
 
-            //// Call AddAttendanceRecordsFromSession method after saving the session
-            //return await AddAttendanceRecordsFromSession(session.SessionId);
+           
+            var re1 = await ProcessExcelAndCreateUsers(session.SessionId);
 
             // Read Excel File and save it in record
             var re = await AddAttendanceRecordsFromSession(session.SessionId);

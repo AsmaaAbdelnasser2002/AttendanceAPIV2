@@ -4,6 +4,7 @@ using AttendanceAPIV2.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AttendanceAPIV2.Migrations
 {
     [DbContext(typeof(AttendanceContext))]
-    partial class AttendanceContextModelSnapshot : ModelSnapshot
+    [Migration("20241002152239_init5")]
+    partial class init5
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -177,6 +179,7 @@ namespace AttendanceAPIV2.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("User_Id")
+                        .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
                     b.Property<byte[]>("VoicesFolder")
@@ -240,9 +243,6 @@ namespace AttendanceAPIV2.Migrations
 
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
-
-                    b.Property<string>("ExaminerId")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Gender")
                         .IsRequired()
@@ -491,7 +491,8 @@ namespace AttendanceAPIV2.Migrations
                     b.HasOne("AttendanceAPIV2.Models.User", "User")
                         .WithMany("Sessions")
                         .HasForeignKey("User_Id")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Folder");
 

@@ -216,7 +216,7 @@ public class FaceRecognitionController : ControllerBase
             }
 
             var session = await _context.Sessions.FindAsync(sessionId);
-            if (session.TimeLimit <= DateTime.Now)
+            if (session.TimeLimit >= DateTime.Now)
             {
                 // Modify the properties as needed
                 attendanceRecord.TimeIn = DateTime.Now; // Update time in if needed
@@ -243,7 +243,7 @@ public class FaceRecognitionController : ControllerBase
             }
             else
             {
-               // return Ok(new { message = "You passed the time limit." });
+                return Ok(new { message = "You passed the time limit." });
             }
 
         }

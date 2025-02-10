@@ -4,6 +4,7 @@ namespace AttendanceAPIV2.Models.DTOs
 {
     public class FolderDto
     {
+        [Required]
         public string FolderName { get; set; }
 
         public IFormFile? Sheet { get; set; }

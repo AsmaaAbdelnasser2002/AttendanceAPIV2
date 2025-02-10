@@ -39,7 +39,8 @@ namespace AttendanceAPIV2.Controllers
             if (notification != null && notification.IsRead == false)
             {
                 notification.IsRead = true;
-                 _context.SaveChangesAsync();
+                _context.Notifications.Update(notification);
+                _context.SaveChangesAsync();
             }
             return Ok(notification);
         }

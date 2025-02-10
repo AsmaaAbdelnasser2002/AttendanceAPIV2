@@ -14,9 +14,11 @@ namespace AttendanceAPIV2.Models.DTOs
         [StringLength(100)]
         public string SessionName { get; set; }
 
+        [Required]
         [StringLength(255)]
         public string SessionPlace { get; set; }
 
+        [Required]
         [StringLength(100)]
         public string SessionDescription { get; set; }
 

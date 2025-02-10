@@ -89,7 +89,7 @@ namespace AttendanceAPIV2.Controllers
             //var user = await _context.Users.FindAsync(checkInRequest.UserId);
             if (user == null)
             {
-                return BadRequest("User not found.");
+                user = checkInRequest.UserId;
             }
 
             var attendanceRecord = await _context.AttendanceRecords.FirstOrDefaultAsync(x => x.UserId == user && x.SessionId == checkInRequest.SessionId);

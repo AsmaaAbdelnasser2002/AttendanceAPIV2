@@ -286,8 +286,10 @@ namespace AttendanceAPIV2.Controllers
             _context.Sessions.Add(session);
             await _context.SaveChangesAsync();
 
-           
-            var re1 = await ProcessExcelAndCreateUsers(session.SessionId);
+            if (examId != null)
+            {
+                var re1 = await ProcessExcelAndCreateUsers(session.SessionId);
+            }
 
             // Read Excel File and save it in record
             var re = await AddAttendanceRecordsFromSession(session.SessionId);
@@ -434,6 +436,8 @@ namespace AttendanceAPIV2.Controllers
             { session.SessionName = editSessionDto.SessionName; }
             if (editSessionDto.SessionDescription != null)
             { session.SessionDescription = editSessionDto.SessionDescription; }
+            if (editSessionDto.SessionPlace != null)
+            { session.SessionPlace = editSessionDto.SessionPlace; }
             if (editSessionDto.StartTime != null)
             { session.StartTime = editSessionDto.StartTime; }
             if (editSessionDto.EndTime != null)

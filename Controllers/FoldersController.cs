@@ -40,7 +40,7 @@ namespace AttendanceAPIV2.Controllers
             }
 
             var folders = await _context.Folders
-                .Where(p => p.User_Id == userId && p.ParentFolder==null)
+                .Where(p => p.ParentFolder==null)
                 .ToListAsync();
 
             return Ok(folders);
@@ -444,6 +444,10 @@ namespace AttendanceAPIV2.Controllers
             var folder = await _context.Folders.FindAsync(id);
             if (folder == null)
                 return NotFound();
+            if (folder.User_Id != userId)
+            {
+                return Unauthorized();
+            }
 
             // Start the recursive deletion process
             await DeleteSubFoldersAndSessions(id);

@@ -129,40 +129,40 @@ namespace AttendanceAPIV2.Controllers
             }
         }
 
-        [HttpPost("CheckInOut")]
-        public async Task<IActionResult> CheckInOut([FromBody] CheckInRequest checkInRequest)
-        {
+        //[HttpPost("CheckInOut")]
+        //public async Task<IActionResult> CheckInOut([FromBody] CheckInRequest checkInRequest)
+        //{
 
-            // Validate the session QR code
-            var sessionQRCode = await _context.SessionQRCodes
-                .Where(q => q.SessionId == checkInRequest.SessionId && q.Code == checkInRequest.QRCodeData && q.ExpiresAt >= DateTime.Now)
-                .FirstOrDefaultAsync();
+        //    // Validate the session QR code
+        //    var sessionQRCode = await _context.SessionQRCodes
+        //        .Where(q => q.SessionId == checkInRequest.SessionId && q.Code == checkInRequest.QRCodeData && q.ExpiresAt >= DateTime.Now)
+        //        .FirstOrDefaultAsync();
 
-            if (sessionQRCode == null)
-            {
-                return BadRequest("Invalid or expired QR code.");
-            }
+        //    if (sessionQRCode == null)
+        //    {
+        //        return BadRequest("Invalid or expired QR code.");
+        //    }
 
-            // Validate the user
-            var user = await _context.Users.FindAsync(checkInRequest.UserId);
-            if (user == null)
-            {
-                return BadRequest("User not found.");
-            }
+        //    // Validate the user
+        //    var user = await _context.Users.FindAsync(checkInRequest.UserId);
+        //    if (user == null)
+        //    {
+        //        return BadRequest("User not found.");
+        //    }
 
-            // Check if the user has already checked in
-            var attendanceRecord = await _context.AttendanceRecords
-                .Where(ar => ar.SessionId == checkInRequest.SessionId && ar.UserId == checkInRequest.UserId)
-                .FirstOrDefaultAsync();
-             if (attendanceRecord == null && attendanceRecord.TimeOut == null)
-            {
-                // If the user is already checked in but hasn't checked out, mark them as checked out
-                attendanceRecord.TimeOut = DateTime.Now;
-            }
+        //    // Check if the user has already checked in
+        //    var attendanceRecord = await _context.AttendanceRecords
+        //        .Where(ar => ar.SessionId == checkInRequest.SessionId && ar.UserId == checkInRequest.UserId)
+        //        .FirstOrDefaultAsync();
+        //     if (attendanceRecord == null && attendanceRecord.TimeOut == null)
+        //    {
+        //        // If the user is already checked in but hasn't checked out, mark them as checked out
+        //        attendanceRecord.TimeOut = DateTime.Now;
+        //    }
 
-            await _context.SaveChangesAsync();
-            return Ok(new { message = "Attendance recorded successfully." });
-        }
+        //    await _context.SaveChangesAsync();
+        //    return Ok(new { message = "Attendance recorded successfully." });
+        //}
 
         [HttpPost("MarkAttendance/sessionId")]
         public async Task<ActionResult> MarkAttendance(int sessionId, string username)
